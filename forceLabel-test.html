@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.node {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.link, .link-tick {
+  stroke: #000;
+  stroke-width: 1;
+  stroke-opacity: .6;
+}
+
+.axis path, .axis line {
+  fill: none;
+  stroke: #000;
+  rendering: crispEdges;
+}
+
+</style>
+<body>
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script src="forceLabel.js"></script>
+<script>
+
+// Data
+var labelNames = ['buffy', 'willow', 'xander', 'mayor', 'tara', 'giles', 'angel', 'spike', 'oz', 'willy', 'drusilla', 'moloch', 'anya', 'cordelia', 'faith', 'dawn', 'riley', 'kendra'];
+var points = [
+  {x: 50, y: 0.45, fixed: true},
+  {x: 40, y: 0.44, fixed: true},
+  {x: 200, y: 0.465, fixed: true},
+  {x: 210, y: 0.475, fixed: true},
+  {x: 250, y: 0.477, fixed: true},
+  {x: 350, y: 0.4699, fixed: true},
+  {x: 400, y: 0.48, fixed: true},
+  {x: 800, y: 0.485, fixed: true},
+  {x: 1000, y: 0.455, fixed: true},
+  {x: 1010, y: 0.455, fixed: true},
+  {x: 1020, y: 0.455, fixed: true},
+  {x: 1030, y: 0.455, fixed: true},
+  {x: 1005, y: 0.405, fixed: true},
+  {x: 1345, y: 0.415, fixed: true},
+  {x: 2500, y: 0.433, fixed: true},
+  {x: 2500, y: 0.4335, fixed: true},
+  {x: 2500, y: 0.434, fixed: true},
+  {x: 2500, y: 0.4345, fixed: true},
+];
+
+var width = 900;
+var height = 500;
+
+// Draw axes
+var xextent = d3.extent(points, d => d.x);
+var yextent = d3.extent(points, d => d.y);
+
+var xscale = d3.scale.linear().domain(xextent).range([0, width]);
+var yscale = d3.scale.linear().domain(yextent).range([height, 0]);
+
+var xaxis = d3.svg.axis().scale(xscale).orient('bottom');
+var yaxis = d3.svg.axis().scale(yscale).orient('left');
+
+var svg = d3.select('body').append('svg')
+    .attr('width', width + 100)
+    .attr('height', height + 100)
+    .append('g')
+    .attr('transform', 'translate(50, 50)');
+
+svg.append('g').attr('class', 'x axis').attr('transform', 'translate(0, ' + height + ')').call(xaxis);
+svg.append('g').attr('class', 'y axis').call(yaxis);
+
+// Labels and label links
+var labelLinks = svg.selectAll('.label-links');
+var labels = svg.selectAll('.label');
+
+// Setup force layout
+var force = d3.forceLabels()
+  .gravity(0.05)
+  .boundaries(0, 0, height, width)
+  .offset(20)
+  .xscale(xscale)
+  .yscale(yscale)
+  .points(points)
+  .labels(labelNames)
+  .init(svg);
+
+// Add/style links
+force.addLinks(labelLinks)
+  .attr('class', 'label-link')
+  .attr('stroke', 'red')
+  .attr('stroke-width', 3)
+  .attr('stroke-opacity', 0.3);
+
+// Add/style text
+force.addText(labels)
+  .attr('class', 'label')
+  .attr('x', d => d.x)
+  .attr('y', d => d.y)
+  .attr('font-size', '20px')
+  .attr('fill', 'pink')
+  .attr('stroke', 'none');
+
+// Want to do this before adding actual points
+// so that we ticks don't go in front of points
+force.run();
+
+// Scatter plot
+var point = svg.selectAll('.point')
+  .data(points)
+  .enter()
+  .append('circle')
+  .attr('class', 'point')
+  .attr('r', 5)
+  .attr('cx', d => xscale(d.x))
+  .attr('cy', d => yscale(d.y))
+  .attr('fill', 'orange');
+
+</script>

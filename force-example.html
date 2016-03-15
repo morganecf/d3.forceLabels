@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.node {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.link, .link-tick {
+  stroke: #000;
+  stroke-width: 1;
+  stroke-opacity: .6;
+}
+
+.axis path, .axis line {
+  fill: none;
+  stroke: #000;
+  rendering: crispEdges;
+}
+
+</style>
+<body>
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script>
+
+var labelOffset = 10;
+
+var labelNames = ['buffy', 'willow', 'xander', 'mayor', 'tara', 'giles', 'angel', 'spike', 'oz', 'willy', 'drusilla', 'moloch', 'anya', 'cordelia', 'faith', 'dawn', 'riley', 'kendra'];
+
+var points = [
+  {x: 50, y: 0.45, fixed: true},
+  {x: 40, y: 0.44, fixed: true},
+  {x: 200, y: 0.465, fixed: true},
+  {x: 210, y: 0.475, fixed: true},
+  {x: 250, y: 0.477, fixed: true},
+  {x: 350, y: 0.4699, fixed: true},
+  {x: 400, y: 0.48, fixed: true},
+  {x: 800, y: 0.485, fixed: true},
+  {x: 1000, y: 0.455, fixed: true},
+  {x: 1010, y: 0.455, fixed: true},
+  {x: 1020, y: 0.455, fixed: true},
+  {x: 1030, y: 0.455, fixed: true},
+  {x: 1005, y: 0.405, fixed: true},
+  {x: 1345, y: 0.415, fixed: true},
+  {x: 2500, y: 0.433, fixed: true},
+  {x: 2500, y: 0.4335, fixed: true},
+  {x: 2500, y: 0.434, fixed: true},
+  {x: 2500, y: 0.4345, fixed: true},
+];
+var labels = points.map((d, i) => {
+  return {x: d.x + labelOffset, y: d.y, fixed: false, name: labelNames[i]};
+});
+var both = points.map(d => d);
+both.push(...labels);
+
+var links = points.map((d, i) => {
+  return {source: i, target: i + points.length, value: 1};
+});
+
+var width = 900;
+var height = 500;
+
+var xextent = d3.extent(both, d => d.x);
+var yextent = d3.extent(both, d => d.y);
+
+var xscale = d3.scale.linear().domain(xextent).range([0, width]);
+var yscale = d3.scale.linear().domain(yextent).range([height, 0]);
+
+var xaxis = d3.svg.axis().scale(xscale).orient('bottom');
+var yaxis = d3.svg.axis().scale(yscale).orient('left');
+
+var force = d3.layout.force()
+    .charge(-600)
+    .linkDistance(1)  // as increase get further apart
+    .friction(0.1)    // ^^
+    // .charge(50)
+    .gravity(0.01)  // change this for smaller/larger links
+    .size([width, height]);
+
+var both_scaled = both.map(d => {
+  return {x: xscale(d.x), y: yscale(d.y), fixed: d.fixed, name: d.name};
+});
+
+var svg = d3.select('body').append('svg')
+    .attr('width', width + 100)
+    .attr('height', height + 100)
+    .append('g')
+    .attr('transform', 'translate(50, 50)');
+
+svg.append('g').attr('class', 'x axis').attr('transform', 'translate(0, ' + height + ')').call(xaxis);
+svg.append('g').attr('class', 'y axis').call(yaxis);
+
+force.nodes(both_scaled).links(links).start();
+
+var link = svg.selectAll('.link')
+  .data(links)
+  .enter()
+  .append('line')
+  .attr('class', 'link')
+  .attr('id', (d, i) => 'link' + i);
+
+var node = svg.selectAll('.point')
+  .data(both_scaled)
+  .enter()
+  .append('circle')
+  .attr('class', 'point')
+  .attr('r', 6)
+  .attr('fill', d => d.fixed ? '#FF5600' : '#63B5EC');
+
+// No out of bounds
+var boundX = function(d) {
+  return d3.max([5, d3.min([d.x, width - 5])]);
+};
+var boundY = function(d) {
+  return d3.max([5, d3.min([d.y, height - 5])]);
+};
+
+// Place labels correctly
+var labelX = function(d, link, node) {
+  var pos = parseFloat(node.attr('cx'));
+  if (link.target.x < link.source.x) {
+    return pos - (d.name.length * 5);
+  }
+  return pos;
+};
+var labelY = function(d, link, node) {
+  var pos = parseFloat(node.attr('cy'));
+  // target is below
+  if (link.target.y > link.source.y) {
+    return pos + 5;
+  }
+  return pos;
+};
+
+var line = d3.svg.line().x(d => d.x).y(d => d.y);
+
+var transitionLine = function(path, pathLength, end, label, orientation) {
+  var offset = orientation < 0 ? -label.node().getBBox().width - 2 : 2;
+  path.attr('stroke-dasharray', pathLength + ' ' + pathLength)
+    .attr('stroke-dashoffset', pathLength)
+    .transition()
+    .duration(300)
+    .ease('bounce')    // elastic or bounce?
+    .attr('stroke-dashoffset', 0)
+    .attr('opacity', 0.3)
+    .each('end', function() {
+      label.transition().duration(100).attr('x', end.x + offset).attr('y', end.y + 3);
+    });
+};
+
+// Add tick to label line
+var labelTick = function(link, linkdata, label) {
+  var x = parseFloat(link.attr('x2'));
+  var y = parseFloat(link.attr('y2'));
+  var orientation = linkdata.target.x < linkdata.source.x ? -1 : 1;
+  var offset = 8 * orientation;
+  var pathdata = [{x: x, y: y}, {x: x + offset, y: y}];
+  var path = svg.append('path').attr('d', line(pathdata)).attr('class', 'link-tick').attr('opacity', 0);
+  transitionLine(path, path.node().getTotalLength(), pathdata[1], label, orientation);
+};
+
+force.on('tick', function() {
+  link.attr('x1', d => boundX(d.source))
+    .attr('y1', d => boundY(d.source))
+    .attr('x2', d => boundX(d.target))
+    .attr('y2', d => boundY(d.target));
+
+  node.attr('cx', boundX).attr('cy', boundY);
+});
+
+// Show labels
+setTimeout(function() {
+  var labels = [];
+  node.filter(d => !d.fixed).each(function(d, i) {
+    var node = d3.select(this);
+    labels.push({x: labelX(d, links[i], node), y: labelY(d, links[i], node), name: d.name});
+  });
+
+  // Add labels
+  svg.selectAll('.label')
+    .data(labels)
+    .enter()
+    .append('text')
+    .attr('id', (d, i) => 'label' + i)
+    .attr('x', d => d.x)
+    .attr('y', d => d.y)
+    .attr('font-size', '12px')
+    .attr('fill', '#000')
+    .attr('stroke', 'none')
+    .text(d => d.name);
+}, 6000);
+
+// Hide extra stuff
+setTimeout(function() {
+  node.filter(d => !d.fixed).transition().duration(300).attr('r', 0);
+  link.attr('opacity', 0.3);
+}, 7000);
+
+// Add ticks and displace labels
+setTimeout(function() {
+  link.each(function(d, i) {
+    labelTick(d3.select(this), links[i], d3.select('#label' + i));
+  });
+}, 8000);
+
+</script>
