@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.node {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.link, .link-tick {
+  stroke: #000;
+  stroke-width: 1;
+  stroke-opacity: .6;
+}
+
+.axis path, .axis line {
+  fill: none;
+  stroke: #000;
+  rendering: crispEdges;
+}
+
+</style>
+<body>
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script>
+  var width = 900;
+  var height = 500;
+  var max = 500;
+  var data = d3.range(100).map((d, i) => {
+    return {
+      x: Math.random() * max,
+      y: Math.random() * max,
+      label: '(' + this.x + ', ' + this.y + ')',
+      anchor: Math.random() < 0.5 ? true : false,
+    };
+  });
+
+  var svg = d3.select('body')
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height);
+
+  svg.selectAll('.point')
+    .data(data)
+    .enter()
+    .append('g')
+    .attr('class', d => d.anchor ? 'anchor' : 'regular');
+
+  svg.selectAll('.anchor')
+    .append('circle')
+    .attr('cx', d => d.x)
+    .attr('cy', d => d.y)
+    .attr('r', 5)
+    .attr('fill', 'purple');
+  svg.selectAll('.regular')
+    .append('rect')
+    .attr('x', d => d.x)
+    .attr('y', d => d.y)
+    .attr('width', 5)
+    .attr('height', 5)
+    .attr('fill', 'purple');
+
+</script>
+</body>
+</html>

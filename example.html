@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.node {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.link, .link-tick {
+  stroke: #000;
+  stroke-width: 1;
+  stroke-opacity: .6;
+}
+
+.axis path, .axis line {
+  fill: none;
+  stroke: #000;
+  rendering: crispEdges;
+}
+
+</style>
+<body>
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script src="forceLabel.js"></script>
+<script>
+
+// ???? will have to use document.createElement('circle')
+
+var width = 900;
+var height = 500;
+var max = 500;
+var data = d3.range(100).map((d, i) => {
+  return {
+    x: Math.random() * max,
+    y: Math.random() * max,
+    label: '(' + this.x + ', ' + this.y + ')',
+  };
+});
+var links = [];
+
+var svg = d3.select('body')
+  .append('svg')
+  .attr('width', width)
+  .attr('height', height);
+
+var linkAttrs = {
+  element: 'line',
+  attrs: [
+    ['class', 'link'],
+    ['stroke', '#333'],
+    ['opacity', 0.8],
+  ],
+  style: [],
+};
+var labelAttrs = {  // Will be grouped
+  class: 'label',   // required
+  drag: 'force',    // required (options: force, bounded, none)
+  attrs: [
+    ['id', (d, i) => 'label' + i],
+    ['cursor', 'move'],
+  ],
+  elements: [       // Will be layered in this order
+    {
+      element: 'rect',
+      attrs: [
+        ['class', 'label-container'],
+        ['rx', 2],
+        ['ry', 2],
+        ['fill', 'orange'],
+        ['stroke', '#333'],
+        ['fill-opacity', 0.6],
+        ['stroke-opacity', 1],
+      ],
+    },
+    {
+      element: 'text',
+      attrs: [
+        ['x', 5],
+        ['y', 5],
+        ['html', d => d.label],
+      ],
+    }
+  ],
+};
+
+var link = svg.selectAll('.link');
+var point = svg.selectAll('.point');
+var label = svg.selectAll('.label');
+
+var layout = forceLabels()
+  .linkDistance(30)
+  .friction(0.1)
+  .charge(-2000)
+  .gravity(0)
+  .ticks(800)
+  .size([width, height])
+  .nodes(data, d => d.x, d => d.y);       // or d[0], d[1], etc.
+
+// Function to position labels and links
+var placeLinks = function(label, link) {
+  label.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+  link.attr('x1', d => d.source.x)
+    .attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x)
+    .attr('y2', d => d.target.y);
+};
+
+// Draw points in plot
+points = point.data(data)
+  .enter()
+  .append('circle')
+  .attr('class', 'point')
+  .attr('r', 5)
+  .attr('stroke', '#D64541')
+  .attr('stroke-width', 3)
+  .attr('fill', '#fff')
+  .attr('cx', d => d.x)
+  .attr('cy', d => d.y);
+
+// Draw links and labels
+layout.linkSvg(link, linkAttrs).labelSvg(label, labelAttrs);
+
+// Provide point svg and a key to link points to labels
+layout.pointSvg(points, 'label-key');
+
+layout.start();
+
+points.on('mouseover', function() {
+  console.log('mouseover');
+  layout.pop(d3.select(this));
+});
+
+</script>
+</body>
+</html>

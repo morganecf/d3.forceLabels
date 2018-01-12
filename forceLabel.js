@@ -1,143 +1,185 @@
-/*
-  - ticks should probably be continuous paths
-  - tick offset should be a function of font size (or label height? or label first letter height?)
-*/
-
-d3.forceLabels = function() {
+var forceLabels = function() {
   var self = {};
 
-  var bound_x = function(d) {
-    return d3.max([self.left, d3.min([d.x, self.right])]);
-  };
-  var bound_y = function(d) {
-    return d3.max([self.top, d3.min([d.y, self.bottom])]);
-  };
+  var layout = d3.layout.force();
 
-  var line = d3.svg.line().x(d => d.x).y(d => d.y);
-
-  var labelTick = function(link, linkdata, label) {
-    var x = parseFloat(link.attr('x2'));
-    var y = parseFloat(link.attr('y2'));
-    var orientation = linkdata.target.x < linkdata.source.x ? -1 : 1;
-    var offset = self.offset * orientation;
-    var pathdata = [{x: x, y: y}, {x: x + offset, y: y}];
-    var path = self.tickGroup.append('path')
-      .attr('d', line(pathdata))
-      .attr('class', self.link.attr('class'))
-      .attr('stroke', self.link.attr('stroke'))
-      .attr('stroke-width', self.link.attr('stroke-width'))
-      .attr('stroke-opacity', self.link.attr('stroke-opacity'));
-    var offset_x = orientation < 0 ? -label.node().getBBox().width - 2 : 2;
-    var offset_y = label.node().getBBox().height / 4;   // used to be 3
-    label.attr('x', pathdata[1].x + offset_x).attr('y', pathdata[1].y + offset_y);
+  // Default force layout values for anchor nodes
+  var anchorParameters = {
+    linkDistance: 1,
+    friction: 0.1,
+    charge: -30,
+    gravity: 0.0,
+    theta: 0.8,
+    alpha: 0.1,
+    linkStrength: 0.1,
+    ticks: 500,
   };
 
-  var layout = d3.layout.force()
-    .charge(-600)
-    .linkDistance(1)
-    .friction(0.05)
-    .gravity(0.01);
+  // Number of simulation iterations
+  var ticks = anchorParameters.ticks;
 
-  self.offset = 8;
+  // Key that links points and labels for selection
+  var key = 'd3-force-layout-key';
 
-  layout.boundaries = function(top, left, bottom, right) {
-    self.top = top;
-    self.left = left;
-    self.bottom = bottom;
-    self.right = right;
+  var mapping = {};
 
-    layout.size([right, bottom]);
-    return layout;
+  // Method for getting/setting force parameter
+  var forceParam = function(name, p, ap) {
+    if (p === undefined) return layout[name];
+    layout[name](d => d.anchorNode ? (ap || anchorParameters[name]) : p);
+    return self;
   };
 
-  layout.xscale = function(xscale) {
-    self.xscale = xscale;
-    return layout;
-  };
-  layout.yscale = function(yscale) {
-    self.yscale = yscale;
-    return layout;
-  };
+  // Points in plot
+  self.points;
 
-  layout.offset = function(offset) {
-    self.offset = offset ? offset : 5;
-    return layout;
-  };
+  // Nodes that connect to labels (invisible)
+  self.nodes;
 
-  layout.points = function(points) {
+  // Labels
+  self.labels = [];
+
+  // Links that connect nodes and labels
+  self.links = [];
+
+  // Svg elements and attributes
+  self.link;
+  self.node;
+  self.linkAttrs;
+  self.labelAttrs;
+
+  // Accessor functions for force layout parameters
+  self.linkDistance = (ld, lda) => forceParam('linkDistance', ld, lda);
+  self.friction = (f, fa) => forceParam('friction', f, fa);
+  self.charge = (c, ca) => forceParam('charge', c, ca);
+  self.gravity = (g, ga) => forceParam('gravity', g, ga);
+  self.theta = (t, ta) => forceParam('theta', t, ta);
+  self.alpha = (a, aa) => forceParam('alpha', a, aa);
+  self.ticks = (t) => {
+    if (t === undefined) return ticks;
+    ticks = t;
+    return self;
+  };
+  self.size = (w, h) => {
+    layout.size([w, h]);
+    return self;
+  };
+  self.nodes = (points, x, y) => {
     self.points = points;
-    return layout;
-  };
-
-  layout.labels = function(labels) {
-    self.labels = [];
-    self.nodes = [];
-
-    self.points.forEach(function(d, i) {
-      var x = self.xscale(d.x);
-      var y = self.yscale(d.y);
-      self.nodes.push({x: x, y: y, fixed: true});
-      self.labels.push({x: x, y: y, fixed: false, name: labels[i]});
+    self.nodes = points.map(d => {
+      return {x: x(d), y: y(d), fixed: true, anchorNode: true};
     });
+    layout.nodes(self.nodes);
+    layout.links(self.links);
+    return self;
+  };
 
-    self.nodes.push(...self.labels);
-
-    self.links = self.points.map((d, i) => {
-      return {source: i, target: i + self.labels.length};
+  self.linkSvg = (svg, attrs) => {
+    self.link = svg;
+    self.linkAttrs = attrs;
+    return self;
+  };
+  self.labelSvg = (svg, attrs) => {
+    self.node = svg;
+    self.labelAttrs = attrs;
+    return self;
+  };
+  self.pointSvg = (svg, k) => {
+    key = k || key;
+    svg.attr(key, (d, i) => {
+      const name = key + '-' + i;
+      mapping[name] = layout.nodes()[i];
+      return name;
     });
-
-    layout.nodes(self.nodes).links(self.links);
-
-    return layout;
+    self.node.attr(key, (d, i) => key + '-' + i);
+    return self;
   };
 
-  layout.init = function(svg) {
-    self.node = svg.append('g')
-      .attr('class', 'd3-force-points')
-      .selectAll('.d3-force-point')
-      .data(self.nodes)
-      .enter()
-      .append('circle')
-      .attr('class', 'd3-force-point')
-      .attr('r', 5)
-      .attr('opacity', 0);
-    self.tickGroup = svg.append('g').attr('class', 'd3-force-ticks');
-    return layout;
+  self.tick = (tickFn) => {
+    layout.on('tick', function() {
+      tickFn(self.node, self.link);
+    });
   };
 
-  layout.addLinks = function(linkSvg) {
-    self.link = linkSvg.data(self.links).enter().append('line');
-    return self.link;
-  };
-
-  layout.addText = function(textSvg) {
-    self.labelSvg = textSvg.data(self.labels)
-      .enter()
-      .append('text')
-      .text(d => d.name);
-    return self.labelSvg;
-  };
-
-  layout.on('tick', function() {
-    self.link.attr('x1', d => bound_x(d.source))
-      .attr('y1', d => bound_y(d.source))
-      .attr('x2', d => bound_x(d.target))
-      .attr('y2', d => bound_y(d.target));
-
-    self.node.attr('cx', bound_x).attr('cy', bound_y);
-  });
-
-  layout.run = function(niter) {
-    var n = niter || 500;
-
+  function start() {
     layout.start();
-    for (var i = 0; i < n; i++) layout.tick();
+    for (var i = 0; i < ticks; i++) layout.tick();
     layout.stop();
+    layout.start();
+  }
 
-    self.link.each(function(d, i) {
-      labelTick(d3.select(this), self.links[i], d3.select(self.labelSvg[0][i]));
+  function update() {
+    var l, g, n, lg, e;
+
+    // Draw links
+    self.link = self.link.data(self.links);
+
+    l = self.link.enter().insert(self.linkAttrs.element, '.force-point');       // should this be class of group?
+    if (self.linkAttrs.attrs) self.linkAttrs.attrs.forEach(attr => d3.selection.prototype.attr.apply(l, attr));
+    if (self.linkAttrs.style) self.linkAttrs.style.forEach(attr => d3.selection.prototype.style.apply(l, attr));
+
+    self.link.exit().remove();
+
+    console.log(layout.links());
+
+    // Root node for invisible nodes and labels (which both act as force nodes)
+    self.node = self.node.data(self.nodes);
+    g = self.node.enter().append('g').attr('class', d => d.anchorNode ? 'd3-force-label-node' : self.labelAttrs.class);
+    g.call(d => d.anchorNode ? null : self.labelAttrs.drag);  // TODO might be able to call this at label group level? And user should be able to pass in own drag function (ex: with bounding)
+
+    // Invisible nodes
+    n = g.selectAll('.d3-force-label-node').append('circle').attr('r', 1).attr('opacity', 0);
+
+    // Label group
+    lg = g.selectAll('.' + self.labelAttrs.class).append('g');
+
+    if (self.labelAttrs.attr) self.labelAttrs.attrs.forEach(attr => d3.selection.prototype.attr.apply(lg, attr));
+    if (self.labelAttrs.style) self.labelAttrs.style.forEach(attr => d3.selection.prototype.style.apply(lg, attr));
+    self.labelAttrs.elements.forEach(elem => {
+      e = lg.append(elem.element);
+      if (elem.attrs) elem.attrs.forEach(a => d3.selection.prototype.attr.apply(e, a));
+      if (elem.style) elem.style.forEach(a => d3.selection.prototype.style.apply(e, a));
     });
+
+    self.node.exit().remove();
+
+    start();
+  }
+
+  self.start = () => start();
+
+  // Add a label
+  self.pop = (point) => {
+    var k = point.attr(key);
+    var data = mapping[k];
+
+    var newNode = {fixed: false, anchorNode: false, x: data.x, y: data.y};
+    newNode[key] = k;
+
+    self.nodes.push(newNode);
+    self.links.push({source: data, target: newNode});
+
+    update();
   };
 
-  return layout;
+  // Remove a label
+  self.remove = (point) => {
+
+  };
+
+  // Show a label that's been hidden
+  self.show = (point) => {
+
+  };
+
+  // Hide a label that's showing
+  self.hide = (point) => {
+
+  };
+
+  return self;
 };
+
+/*
+  MIGHT BE HELPFUL: http://stackoverflow.com/questions/18509792/d3-force-directed-graph-different-shape-according-to-data-and-value-given/24792680#24792680
+*/
